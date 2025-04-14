@@ -98,6 +98,21 @@ pnpm build
 pnpm start
 ```
 
+## 部署到 Vercel
+
+本项目可以一键部署到 Vercel 平台：
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/your-username/OneDomain)
+
+点击上面的按钮，按照以下步骤操作：
+
+1. 登录或注册 Vercel 账号
+2. 选择你的 GitHub 账号
+3. 选择要部署的仓库
+4. 点击 "Deploy" 按钮
+
+部署完成后，Vercel 会提供一个生产环境的 URL。每次推送到主分支时，Vercel 都会自动重新部署。
+
 ## 配置说明
 
 ### Next.js 配置
