@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -46,6 +45,7 @@ export function DomainForm() {
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [showCloneDialog, setShowCloneDialog] = useState(false)
   const [showImportDialog, setShowImportDialog] = useState(false)
+  const [showBatchDeleteConfirmDialog, setShowBatchDeleteConfirmDialog] = useState(false) // 新增：批量删除确认对话框状态
   const [sortField, setSortField] = useState<SortField>("displayOrder")
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
   const [selectedDomainId, setSelectedDomainId] = useState<number | null>(null)
@@ -283,18 +283,19 @@ export function DomainForm() {
     const currentDomain = newDomains[domainIndex]
 
     if (direction === "up" && domainIndex > 0) {
-      // 交换当前域名和上一个域名的显示顺序
       const prevDomain = newDomains[domainIndex - 1]
       const tempOrder = currentDomain.displayOrder
       currentDomain.displayOrder = prevDomain.displayOrder
       prevDomain.displayOrder = tempOrder
     } else if (direction === "down" && domainIndex < domains.length - 1) {
-      // 交换当前域名和下一个域名的显示顺序
       const nextDomain = newDomains[domainIndex + 1]
       const tempOrder = currentDomain.displayOrder
       currentDomain.displayOrder = nextDomain.displayOrder
       nextDomain.displayOrder = tempOrder
     }
+
+    // 新增：根据 displayOrder 排序，保证数组顺序和 displayOrder 一致
+    newDomains.sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0))
 
     setDomains(newDomains)
     saveDomains()
@@ -382,6 +383,42 @@ export function DomainForm() {
   }
 
   // 导入域名
+  // 批量选择相关状态
+  const [selectedDomainIds, setSelectedDomainIds] = useState<number[]>([])
+  const [showBatchDialog, setShowBatchDialog] = useState(false)
+
+  // 批量选择切换
+  const toggleSelectDomain = (id: number) => {
+    setSelectedDomainIds((prev) => prev.includes(id) ? prev.filter(did => did !== id) : [...prev, id])
+  }
+
+  // 全选
+  const selectAllDomains = () => {
+    setSelectedDomainIds(domains.map(d => d.id))
+  }
+
+  // 清空选择
+  const clearSelectedDomains = () => {
+    setSelectedDomainIds([])
+  }
+
+  // 批量删除
+  // 批量删除
+  const batchDeleteDomains = () => {
+    const newDomains = domains.filter(domain => !selectedDomainIds.includes(domain.id))
+    setDomains(newDomains)
+    setSelectedDomainIds([])
+    setShowBatchDeleteConfirmDialog(false) // 使用新的状态
+    // 修正：setDomains 是异步的，localStorage 需同步写入 newDomains
+    localStorage.setItem("domainData", JSON.stringify(newDomains))
+    setSaveSuccess(true)
+    setTimeout(() => setSaveSuccess(false), 3000)
+  }
+
+  // 修正：导入、删除等操作后清空批量选择
+  useEffect(() => {
+    setSelectedDomainIds([])
+  }, [domains])
   const importDomains = () => {
     try {
       setImportError("")
@@ -531,7 +568,7 @@ export function DomainForm() {
                   <Checkbox
                     id="permanent"
                     checked={newDomain.isPermanent}
-                    onCheckedChange={(checked) => {
+                    onCheckedChange={(checked: boolean) => {
                       const isPermanent = checked === true
                       setNewDomain({
                         ...newDomain,
@@ -568,7 +605,7 @@ export function DomainForm() {
                       id="renewalValue"
                       type="number"
                       min="0"
-                      value={newDomain.renewalValue}
+                      value={newDomain.renewalValue ?? 0}
                       onChange={(e) => {
                         const value = Number.parseInt(e.target.value) || 0
                         setNewDomain({
@@ -582,7 +619,7 @@ export function DomainForm() {
                     />
                     <Select
                       value={newDomain.renewalUnit}
-                      onValueChange={(value) => {
+                      onValueChange={(value: string) => {
                         setNewDomain({
                           ...newDomain,
                           renewalUnit: value,
@@ -819,14 +856,14 @@ export function DomainForm() {
             </DialogContent>
           </Dialog>
 
-          <Button variant="outline" onClick={saveDomains} className="border-gray-600 text-gray-300">
+          <Button variant="outline" onClick={saveDomains} className="bg-green-500 text-white hover:bg-green-600 border-none shadow-md">
             <Save className="mr-2 h-4 w-4" />
             保存更改
           </Button>
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="overflow-x-auto">
         {saveSuccess && (
           <Alert className="mb-4 border-green-800 bg-green-950 text-green-400">
             <AlertCircle className="h-4 w-4" />
@@ -834,75 +871,74 @@ export function DomainForm() {
           </Alert>
         )}
 
+        {/* 批量操作区域 */}
+        <div className="flex items-center gap-2 mb-2">
+          <Checkbox
+            checked={selectedDomainIds.length === domains.length && domains.length > 0}
+            data-state={selectedDomainIds.length > 0 && selectedDomainIds.length < domains.length ? "indeterminate" : undefined}
+            onCheckedChange={(checked: boolean) => {
+              if (checked) {
+                selectAllDomains()
+              } else {
+                clearSelectedDomains()
+              }
+            }}
+            id="selectAll"
+            className="border-green-500 bg-gray-900 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-400 focus:ring-green-400"
+          />
+          <Label htmlFor="selectAll" className="text-gray-300 cursor-pointer select-none">
+            全选
+          </Label>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={clearSelectedDomains}
+            className={`ml-2 px-3 py-1 rounded bg-gray-700 text-gray-100 border border-green-600 hover:bg-green-700 hover:text-white transition ${selectedDomainIds.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={selectedDomainIds.length === 0}
+          >
+            取消选择
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowBatchDeleteConfirmDialog(true)} // 更新：触发确认对话框
+            className={`ml-2 px-3 py-1 rounded bg-red-700 text-white border border-red-600 hover:bg-red-800 transition ${selectedDomainIds.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={selectedDomainIds.length === 0}
+          >
+            批量删除
+          </Button>
+        </div>
+
         <div className="rounded-md border border-gray-700">
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-700 bg-gray-900">
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                    显示顺序
+            <table className="min-w-full divide-y divide-gray-700">
+              <thead className="bg-gray-800">
+                <tr>
+                  <th className="px-2 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider w-8">
+                    {/* 单元格选择框 */}
                   </th>
-                  <th
-                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400 cursor-pointer hover:text-gray-200"
-                    onClick={() => sortDomains("name")}
-                  >
-                    域名 {getSortIcon("name")}
-                  </th>
-                  <th
-                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400 cursor-pointer hover:text-gray-200"
-                    onClick={() => sortDomains("expiry")}
-                  >
-                    到期日 {getSortIcon("expiry")}
-                  </th>
-                  <th
-                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400 cursor-pointer hover:text-gray-200"
-                    onClick={() => sortDomains("renewalPeriod")}
-                  >
-                    续期周期 {getSortIcon("renewalPeriod")}
-                  </th>
-                  <th
-                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400 cursor-pointer hover:text-gray-200"
-                    onClick={() => sortDomains("provider")}
-                  >
-                    提供商 {getSortIcon("provider")}
-                  </th>
-                  <th
-                    className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400 cursor-pointer hover:text-gray-200"
-                    onClick={() => sortDomains("status")}
-                  >
-                    状态 {getSortIcon("status")}
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                    控制台URL
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-400">
-                    操作
-                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => sortDomains("name")}>域名 {getSortIcon("name")}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => sortDomains("expiry")}>到期日 {getSortIcon("expiry")}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => sortDomains("renewalPeriod")}>续期周期 {getSortIcon("renewalPeriod")}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => sortDomains("provider")}>提供商 {getSortIcon("provider")}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider cursor-pointer" onClick={() => sortDomains("status")}>状态 {getSortIcon("status")}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">控制台URL</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">操作</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-700">
+              <tbody className="bg-gray-900 bg-opacity-50 divide-y divide-gray-700">
                 {sortedDomains.map((domain) => (
-                  <tr key={domain.id} className="hover:bg-gray-700">
-                    <td className="whitespace-nowrap px-4 py-3 text-sm">
-                      <div className="flex items-center space-x-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveDomainOrder(domain.id, "up")}
-                          className="h-6 w-6 p-0 text-gray-400 hover:bg-gray-700 hover:text-gray-200"
-                        >
-                          <ArrowUp className="h-4 w-4" />
-                        </Button>
-                        <span className="w-6 text-center">{domain.displayOrder}</span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => moveDomainOrder(domain.id, "down")}
-                          className="h-6 w-6 p-0 text-gray-400 hover:bg-gray-700 hover:text-gray-200"
-                        >
-                          <ArrowDown className="h-4 w-4" />
-                        </Button>
-                      </div>
+                  <tr
+                    key={domain.id}
+                    className={`transition-colors ${selectedDomainIds.includes(domain.id) ? 'bg-green-900/70 border-l-4 border-green-400' : 'hover:bg-gray-800'}`}
+                  >
+                    <td className="px-2 py-2 text-center">
+                      <Checkbox
+                        checked={selectedDomainIds.includes(domain.id)}
+                        onCheckedChange={() => toggleSelectDomain(domain.id)}
+                        aria-label="选择域名"
+                        className="border-green-500 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-400 focus:ring-green-400"
+                      />
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-sm">
                       <Input
@@ -1009,6 +1045,34 @@ export function DomainForm() {
           </div>
         </div>
       </CardContent>
+
+      {/* 批量删除确认对话框 */}
+      <Dialog open={showBatchDeleteConfirmDialog} onOpenChange={setShowBatchDeleteConfirmDialog}>
+        <DialogContent className="border-gray-700 bg-gray-800 text-gray-100">
+          <DialogHeader>
+            <DialogTitle className="text-red-400">确认批量删除</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              您确定要删除选中的 {selectedDomainIds.length} 个域名吗？此操作无法撤销。
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowBatchDeleteConfirmDialog(false)}
+              className="border-gray-600 text-gray-300 hover:bg-gray-700"
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={batchDeleteDomains} // 确认后执行删除
+              className="bg-red-600 hover:bg-red-700"
+            >
+              确认删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   )
 }
