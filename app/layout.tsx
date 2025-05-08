@@ -6,9 +6,8 @@ import "./globals.css"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "域名管理系统",
-  description: "管理和展示您的域名投资组合",
-    generator: 'v0.dev'
+  title: "Viper3's 域名",
+  description: "一个简单的命令行式域名停靠页"
 }
 
 export default function RootLayout({
@@ -51,6 +50,7 @@ export default function RootLayout({
             `,
           }}
         />
+        <link rel="icon" type="image/png" href="/OneDomain.png" />
       </head>
       <body className={inter.className}>{children}</body>
     </html>
